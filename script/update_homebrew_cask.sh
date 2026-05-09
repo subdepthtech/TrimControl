@@ -32,6 +32,17 @@ if [[ ! "$DOWNLOAD_URL" == "https://github.com/"*"/releases/download/v${VERSION}
   exit 1
 fi
 
+VERSION_PATTERN="${VERSION//./\\.}"
+DOWNLOAD_URL_TEMPLATE="$(printf '%s' "$DOWNLOAD_URL" | sed "s/${VERSION_PATTERN}/#{version}/g")"
+case "$DOWNLOAD_URL_TEMPLATE" in
+  https://github.com/*/releases/download/v'#{version}'/TrimControl-'#{version}'-arm64.dmg)
+    ;;
+  *)
+    echo "DOWNLOAD_URL must resolve to the version-interpolated TrimControl arm64 DMG." >&2
+    exit 1
+    ;;
+esac
+
 case "$CASK_PATH" in
   /* | *..*)
     echo "CASK_PATH must be a relative path inside the tap checkout." >&2
@@ -45,7 +56,6 @@ ruby_literal() {
 
 VERSION_LITERAL="$(ruby_literal "$VERSION")"
 SHA256_LITERAL="$(ruby_literal "$SHA256")"
-DOWNLOAD_URL_LITERAL="$(ruby_literal "$DOWNLOAD_URL")"
 HOMEPAGE_URL_LITERAL="$(ruby_literal "$HOMEPAGE_URL")"
 
 FULL_CASK_PATH="$TAP_PATH/$CASK_PATH"
@@ -56,7 +66,7 @@ cask "trimcontrol" do
   version $VERSION_LITERAL
   sha256 $SHA256_LITERAL
 
-  url $DOWNLOAD_URL_LITERAL
+  url "$DOWNLOAD_URL_TEMPLATE"
   name "TrimControl"
   desc "Open source and text files in Neovim from Finder"
   homepage $HOMEPAGE_URL_LITERAL
