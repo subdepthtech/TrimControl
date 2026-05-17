@@ -74,13 +74,13 @@ jobs:
       - name: Upload Gitleaks SARIF
         if: always() && hashFiles('gitleaks-results.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@db2c8fe24a75c0f28f87ed1a6fe918a5ccf7b1e6 # v4.31.10
+        uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
         with:
           sarif_file: gitleaks-results.sarif
 
       - name: Upload Gitleaks artifact
         if: always() && hashFiles('gitleaks-results.sarif') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gitleaks-results-${{ github.run_id }}
           path: gitleaks-results.sarif
@@ -112,7 +112,7 @@ jobs:
 
       - name: Run OSV dependency scan
         continue-on-error: true
-        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
           scan-args: |-
             --recursive
@@ -122,7 +122,7 @@ jobs:
 
       - name: Upload OSV JSON artifact
         if: always() && hashFiles('osv-results.json') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: osv-results-${{ github.run_id }}
           path: osv-results.json
@@ -154,7 +154,7 @@ jobs:
 
       - name: Generate Trivy SARIF report
         continue-on-error: true
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -169,13 +169,13 @@ jobs:
       - name: Upload Trivy SARIF
         if: always() && hashFiles('trivy-results.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@db2c8fe24a75c0f28f87ed1a6fe918a5ccf7b1e6 # v4.31.10
+        uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
         with:
           sarif_file: trivy-results.sarif
 
       - name: Generate Trivy JSON report
         continue-on-error: true
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -227,7 +227,7 @@ jobs:
 
       - name: Upload Trivy JSON artifact
         if: always() && hashFiles('trivy-results.json') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-results-${{ github.run_id }}
           path: trivy-results.json
