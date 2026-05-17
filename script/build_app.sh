@@ -12,10 +12,7 @@ ICONSET="$ROOT/.build/TrimControl.iconset"
 cd "$ROOT"
 
 CONFIGURATION="${TRIMCONTROL_BUILD_CONFIGURATION:-debug}"
-BUILD_FLAGS=()
-if [[ "$CONFIGURATION" != "debug" ]]; then
-  BUILD_FLAGS+=(--configuration "$CONFIGURATION")
-fi
+BUILD_FLAGS=(--configuration "$CONFIGURATION")
 
 echo "Building SwiftPM products..."
 swift build "${BUILD_FLAGS[@]}" --product TrimControl
