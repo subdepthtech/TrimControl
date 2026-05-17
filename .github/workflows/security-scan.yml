@@ -1,0 +1,234 @@
+# Baseline non-blocking security scan for public repository maintenance.
+name: Security Scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - trunk
+  schedule:
+    - cron: "17 7 * * 2"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  gitleaks:
+    name: Gitleaks secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Gitleaks
+        id: install-gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          set -euo pipefail
+
+          install_dir="${RUNNER_TEMP}/gitleaks"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          mkdir -p "${install_dir}"
+
+          curl -fsSLo "${install_dir}/${archive}" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          curl -fsSLo "${install_dir}/checksums.txt" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+
+          (
+            cd "${install_dir}"
+            grep "  ${archive}$" checksums.txt > checksums.selected
+            sha256sum -c checksums.selected
+            tar -xzf "${archive}" gitleaks
+          )
+
+          echo "binary=${install_dir}/gitleaks" >> "${GITHUB_OUTPUT}"
+
+      - name: Run redacted Gitleaks scan
+        id: gitleaks
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          "${{ steps.install-gitleaks.outputs.binary }}" detect \
+            --source . \
+            --redact \
+            --no-banner \
+            --report-format sarif \
+            --report-path gitleaks-results.sarif \
+            --exit-code 1
+
+      - name: Upload Gitleaks SARIF
+        if: always() && hashFiles('gitleaks-results.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@db2c8fe24a75c0f28f87ed1a6fe918a5ccf7b1e6 # v4.31.10
+        with:
+          sarif_file: gitleaks-results.sarif
+
+      - name: Upload Gitleaks artifact
+        if: always() && hashFiles('gitleaks-results.sarif') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gitleaks-results-${{ github.run_id }}
+          path: gitleaks-results.sarif
+          retention-days: 14
+
+      - name: Summarize Gitleaks baseline
+        if: always()
+        run: |
+          {
+            echo "## Gitleaks"
+            echo ""
+            echo "This baseline scan is non-blocking and redacts detected secret values."
+            echo "Review SARIF/artifacts before switching this workflow to blocking."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  osv:
+    name: OSV dependency scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Run OSV dependency scan
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        with:
+          scan-args: |-
+            --recursive
+            --format=json
+            --output=osv-results.json
+            ./
+
+      - name: Upload OSV JSON artifact
+        if: always() && hashFiles('osv-results.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: osv-results-${{ github.run_id }}
+          path: osv-results.json
+          retention-days: 14
+
+      - name: Summarize OSV baseline
+        if: always()
+        run: |
+          {
+            echo "## OSV dependency scan"
+            echo ""
+            echo "This baseline scan is non-blocking. Review the JSON artifact for dependency vulnerability evidence."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  trivy:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - name: Generate Trivy SARIF report
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          version: v0.70.0
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@db2c8fe24a75c0f28f87ed1a6fe918a5ccf7b1e6 # v4.31.10
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Generate Trivy JSON report
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          format: json
+          output: trivy-results.json
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          skip-setup-trivy: true
+          version: v0.70.0
+
+      - name: Summarize Trivy findings
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f trivy-results.json ]]; then
+            echo "Trivy JSON report was not produced." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          python3 - <<'PY' >> "${GITHUB_STEP_SUMMARY}"
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("trivy-results.json").read_text())
+          counts = {"CRITICAL": 0, "HIGH": 0, "TOTAL": 0}
+          for result in data.get("Results", []):
+              items = []
+              items.extend(result.get("Vulnerabilities") or [])
+              items.extend(result.get("Misconfigurations") or [])
+              for item in items:
+                  severity = item.get("Severity")
+                  if severity in counts:
+                      counts[severity] += 1
+                  counts["TOTAL"] += 1
+
+          print("## Trivy filesystem findings")
+          print("")
+          print("| Severity | Count |")
+          print("| --- | ---: |")
+          print(f"| CRITICAL | {counts['CRITICAL']} |")
+          print(f"| HIGH | {counts['HIGH']} |")
+          print(f"| Total reported | {counts['TOTAL']} |")
+          print("")
+          print("This baseline scan is non-blocking.")
+          PY
+
+      - name: Upload Trivy JSON artifact
+        if: always() && hashFiles('trivy-results.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trivy-results-${{ github.run_id }}
+          path: trivy-results.json
+          retention-days: 14

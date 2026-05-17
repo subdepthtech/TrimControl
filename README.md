@@ -96,6 +96,12 @@ script/verify_defaults.sh --app dist/TrimControl.app
 
 `script/verify_defaults.sh --app dist/TrimControl.app` verifies the bundle contract without requiring current LaunchServices defaults to point at the uninstalled app.
 
+## Release
+
+Public releases use a signed, notarized DMG plus a Homebrew cask update. See
+`docs/RELEASE.md` for required GitHub secrets, local preflight checks, tag
+policy, and post-release verification.
+
 ## Install
 
 ```sh
